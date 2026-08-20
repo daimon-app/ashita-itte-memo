@@ -962,7 +962,8 @@ const STORAGE_KEY = 'genba_memos_v1';
 
 function loadMemos() {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    return Array.isArray(parsed) ? parsed : [];
   } catch { return []; }
 }
 
@@ -2064,22 +2065,10 @@ checkOnboarding();
   document.getElementById('pwa-manifest').href = url;
 })();
 
-/* ─── PWA: Service Worker インライン ─── */
+/* ─── PWA: Service Worker（実ファイル登録） ─── */
 (function() {
   if (!('serviceWorker' in navigator)) return;
-  const swCode = `
-const CACHE = 'genba-memo-v1';
-self.addEventListener('install', e => { self.skipWaiting(); });
-self.addEventListener('activate', e => { self.clients.claim(); });
-self.addEventListener('fetch', e => {
-  e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request).catch(() => cached))
-  );
-});
-`;
-  const blob = new Blob([swCode], {type: 'application/javascript'});
-  const url = URL.createObjectURL(blob);
-  navigator.serviceWorker.register(url, {type: 'classic'}).catch(() => {});
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
 })();
 </script>
 </body>
