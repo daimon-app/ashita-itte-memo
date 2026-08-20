@@ -1538,6 +1538,7 @@ function openRemindCalendar(m) {
 function exportData() {
   const data = {
     appName: '明日の一手',
+    schemaVersion: 1,
     exportAt: new Date().toISOString(),
     genba_memos_v1: localStorage.getItem('genba_memos_v1'),
     genba_routine_v1: localStorage.getItem('genba_routine_v1'),
@@ -1558,6 +1559,11 @@ function exportData() {
 function importData(event) {
   const file = event.target.files[0];
   if (!file) return;
+  if (file.size > 2 * 1024 * 1024) {
+    showToast('バックアップは2MB以下を選んでください');
+    event.target.value = '';
+    return;
+  }
   if (!confirm('現在のデータに上書きします。よろしいですか？')) {
     event.target.value = '';
     return;
@@ -1566,9 +1572,22 @@ function importData(event) {
   reader.onload = function(e) {
     try {
       const data = JSON.parse(e.target.result);
-      if (data.genba_memos_v1 !== undefined) localStorage.setItem('genba_memos_v1', data.genba_memos_v1);
-      if (data.genba_routine_v1 !== undefined) localStorage.setItem('genba_routine_v1', data.genba_routine_v1 || '');
-      if (data.genba_mode_v1 !== undefined) localStorage.setItem('genba_mode_v1', data.genba_mode_v1 || 'genba');
+      const schemaVersion = data && data.schemaVersion === undefined ? 0 : data && data.schemaVersion;
+      if (!data || data.appName !== '明日の一手' || ![0, 1].includes(schemaVersion)) {
+        throw new Error('unsupported backup schema');
+      }
+      if (typeof data.genba_memos_v1 !== 'string') throw new Error('missing memo data');
+      const importedMemos = JSON.parse(data.genba_memos_v1);
+      if (!Array.isArray(importedMemos) || importedMemos.length > 10000) throw new Error('invalid memo data');
+      if (importedMemos.some(m => !m || typeof m !== 'object' || Array.isArray(m))) throw new Error('invalid memo entry');
+      if (data.genba_routine_v1 !== null && data.genba_routine_v1 !== undefined && typeof data.genba_routine_v1 !== 'string') throw new Error('invalid routine');
+      if (data.genba_mode_v1 !== null && data.genba_mode_v1 !== undefined && !['genba', 'work'].includes(data.genba_mode_v1)) throw new Error('invalid mode');
+
+      // All values are validated before the first write, so a rejected import
+      // cannot partially overwrite the current local data.
+      localStorage.setItem('genba_memos_v1', JSON.stringify(importedMemos));
+      localStorage.setItem('genba_routine_v1', data.genba_routine_v1 || '');
+      localStorage.setItem('genba_mode_v1', data.genba_mode_v1 || 'genba');
       renderMorning();
       renderHistory();
       applyMode();
